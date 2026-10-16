@@ -134,8 +134,8 @@ final class OverlayController: NSObject, UIAdaptivePresentationControllerDelegat
     }
 }
 
-/// Hosts set global `UINavigationBar.appearance()` (tints, fonts, back images); scoped to this class,
-/// the panel gets system defaults with the inspector's accent instead.
+/// Hosts set global `UINavigationBar.appearance()` / `UITabBar.appearance()` (tints, fonts, even hiding the tab bar);
+/// scoped to this class, the panel gets system defaults with the inspector's accent instead.
 final class PanelHostingController: UIHostingController<PanelView> {
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
         presentingViewController?.supportedInterfaceOrientations ?? super.supportedInterfaceOrientations
@@ -155,6 +155,16 @@ final class PanelHostingController: UIHostingController<PanelView> {
         bar.scrollEdgeAppearance = appearance
         bar.compactAppearance = appearance
         bar.tintColor = UIColor(Theme.accent)
+
+        // Apps with a custom tab bar often hide the system one app-wide (`UITabBar.appearance().isHidden = true`),
+        // which would also hide the panel's Network | Events bar. Scoped to the panel, this wins.
+        let tabBar = UITabBar.appearance(whenContainedInInstancesOf: [PanelHostingController.self])
+        tabBar.isHidden = false
+        let tabAppearance = UITabBarAppearance()
+        tabAppearance.configureWithDefaultBackground()
+        tabBar.standardAppearance = tabAppearance
+        tabBar.scrollEdgeAppearance = tabAppearance
+        tabBar.tintColor = UIColor(Theme.accent)
     }
 }
 #endif
