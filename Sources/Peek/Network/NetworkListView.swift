@@ -147,11 +147,11 @@ struct RequestRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
                     MethodChip(method: record.method)
-                    Text(record.url.path.isEmpty ? "/" : record.url.path)
+                    Text(record.shortPath)
                         .font(.system(.footnote, design: .monospaced))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
-                        .truncationMode(.middle)
+                        .truncationMode(.head) // the end of a path is what tells requests apart
                 }
                 Text([record.url.host, record.module].compactMap { $0 }.joined(separator: " · "))
                     .font(.caption2)

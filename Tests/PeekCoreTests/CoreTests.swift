@@ -407,6 +407,13 @@ private func record(bytes: Int = 0, id: UUID = UUID(), status: Int? = nil) -> HT
         #expect(JSONTree(Data("hello".utf8)) == nil)
     }
 
+    @Test func shortPathKeepsTheDistinguishingEnd() {
+        func path(_ url: String) -> String { HTTPRecord(method: "GET", url: URL(string: url)!).shortPath }
+        #expect(path("https://a.io/api/v1/cms/collections/new_projects_overview/entries?page=1") == "…/new_projects_overview/entries")
+        #expect(path("https://a.io/v1/profile") == "/v1/profile")
+        #expect(path("https://a.io") == "/")
+    }
+
     @Test func dottedKeysDontCollide() {
         let ids = JSONTree(Data(#"{"a.b":1,"a":{"b":2}}"#.utf8))!.lines.map(\.id)
         #expect(ids == ["$", "$.a", "$.a.b", #"$["a.b"]"#])

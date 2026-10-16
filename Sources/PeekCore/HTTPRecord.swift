@@ -109,6 +109,14 @@ public struct HTTPRecord: InspectorRecord {
 
     public func displayed(redacted: Bool) -> HTTPRecord { redacted ? self : revealed() }
 
+    /// The part of the path that tells similar requests apart, for one-line rows: the last two segments,
+    /// e.g. `…/new_projects_overview/entries` for `/api/v1/cms/collections/new_projects_overview/entries`.
+    public var shortPath: String {
+        let segments = url.path.split(separator: "/")
+        guard segments.count > 2 else { return url.path.isEmpty ? "/" : url.path }
+        return "…/" + segments.suffix(2).joined(separator: "/")
+    }
+
     public var byteCost: Int {
         [requestBody, responseBody, original?.requestBody, original?.responseBody].reduce(0) { $0 + ($1?.data.count ?? 0) }
     }

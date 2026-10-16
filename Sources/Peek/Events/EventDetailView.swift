@@ -153,11 +153,11 @@ struct EventDetailView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 MethodChip(method: record.method)
-                                Text(record.url.path.isEmpty ? "/" : record.url.path)
+                                Text(record.shortPath)
                                     .font(.system(.caption, design: .monospaced))
                                     .foregroundStyle(Theme.text)
                                     .lineLimit(1)
-                                    .truncationMode(.middle)
+                                    .truncationMode(.head)
                                 Spacer(minLength: 4)
                                 Text(Format.status(record))
                                     .font(.system(.caption, design: .monospaced))
