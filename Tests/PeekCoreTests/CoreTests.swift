@@ -455,6 +455,12 @@ private func record(bytes: Int = 0, id: UUID = UUID(), status: Int? = nil) -> HT
         #expect(form.contains("user=ali") && !form.contains("xyz"))
     }
 
+    @Test func redactsJSONInsideStringValues() {
+        let body = Data(#"{"data":"{\"email\":\"a@b.co\",\"password\":\"hunter2\"}"}"#.utf8)
+        let text = String(decoding: redactor.redact(body: body), as: UTF8.self)
+        #expect(!text.contains("hunter2") && !text.contains("a@b.co"))
+    }
+
     @Test func truncatesOnACharacterBoundary() {
         let body = CapturedBody(Data("aé".utf8), limit: 2) // "é" is 2 bytes; a raw cut would split it
         #expect(String(data: body.data, encoding: .utf8) == "a")

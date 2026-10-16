@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Peek Works</title>
+<style>
+:root {
+  --bg: #fbfaf7; --surface: #ffffff; --text: #1d1f23; --muted: #5d636d; --line: #e4e1da;
+  --accent: #5b45c9; --accent-soft: #eeeafd; --ok: #1f7a4d; --warn: #9a5b00; --code: #f3f1ec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1114; --surface: #171a1f; --text: #eceef1; --muted: #a3aab5; --line: #2a2f37;
+    --accent: #b9a6ff; --accent-soft: #241f3a; --ok: #4fd69c; --warn: #ffbe5c; --code: #1d2127;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1114; --surface: #171a1f; --text: #eceef1; --muted: #a3aab5; --line: #2a2f37;
+  --accent: #b9a6ff; --accent-soft: #241f3a; --ok: #4fd69c; --warn: #ffbe5c; --code: #1d2127;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 34px; margin: 0 0 6px; letter-spacing: -0.02em; }
+.lead { color: var(--muted); font-size: 18px; margin: 0 0 28px; }
+h2 { font-size: 22px; margin: 44px 0 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+h2 .n { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 8px; }
+h3 { font-size: 17px; margin: 22px 0 8px; }
+p { margin: 8px 0; }
+ul, ol { margin: 8px 0; padding-left: 22px; }
+li { margin: 4px 0; }
+code { font: 13.5px/1.4 ui-monospace, "SF Mono", Menlo, monospace; background: var(--code);
+  padding: 1px 5px; border-radius: 5px; }
+pre { background: var(--code); padding: 14px 16px; border-radius: 10px; overflow-x: auto; margin: 10px 0; }
+pre code { background: none; padding: 0; }
+table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 15px; }
+.tablewrap { overflow-x: auto; }
+th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; }
+.toc ol { columns: 2; column-gap: 28px; margin: 0; }
+.toc a { color: var(--text); text-decoration: none; }
+.toc a:hover { color: var(--accent); }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 14px 0; }
+.box { flex: 1 1 140px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.box b { display: block; font-size: 14px; }
+.box span { font-size: 13px; color: var(--muted); }
+.box.hl { border-color: var(--accent); background: var(--accent-soft); }
+.arrow { align-self: center; color: var(--muted); font-size: 20px; }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 12px 0; }
+.warn { border-left-color: var(--warn); }
+.ok { color: var(--ok); font-weight: 600; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.card h3 { margin-top: 0; }
+@media (max-width: 640px) {
+  .toc ol { columns: 1; }
+  .grid2 { grid-template-columns: 1fr; }
+  .arrow { transform: rotate(90deg); width: 100%; text-align: center; }
+  h1 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<main>
+
+<h1>How Peek works</h1>
+<p class="lead">A short, complete tour of the library: what it is, how data gets in, where it lives, how it is shown, and how it stays out of production.</p>
+
+<nav class="toc" aria-label="Contents">
+<ol>
+  <li><a href="#what">What Peek is</a></li>
+  <li><a href="#picture">The big picture</a></li>
+  <li><a href="#modules">The two modules</a></li>
+  <li><a href="#inputs">How data gets in</a></li>
+  <li><a href="#request">Life of one request</a></li>
+  <li><a href="#store">Where records live</a></li>
+  <li><a href="#redaction">Redaction</a></li>
+  <li><a href="#events">Analytics events and checks</a></li>
+  <li><a href="#ui">The UI</a></li>
+  <li><a href="#prod">Staying out of production</a></li>
+  <li><a href="#perf">Performance and memory</a></li>
+  <li><a href="#yassir">How Yassir's apps use it</a></li>
+  <li><a href="#tests">Tests and CI</a></li>
+  <li><a href="#files">File map</a></li>
+</ol>
+</nav>
+
+<h2 id="what"><span class="n">1</span>What Peek is</h2>
+<ul>
+  <li>An <b>in-app inspector</b> for iOS apps: a floating button that opens a panel.</li>
+  <li>It shows three things: <b>network requests</b>, <b>socket messages</b>, and <b>analytics events</b>.</li>
+  <li>It is for QA and developers testing on real devices, with no proxy, cable or debugger.</li>
+  <li>Swift Package, iOS 16.6+, <b>no dependencies</b>, MIT license.</li>
+  <li>Repo: <code>github.com/mohammadhamdan1991/Peek</code></li>
+</ul>
+
+<h2 id="picture"><span class="n">2</span>The big picture</h2>
+<p>Every piece of data follows the same path:</p>
+<div class="flow" role="img" aria-label="App code, then capture, then background queue, then record store, then UI">
+  <div class="box"><b>Your app</b><span>makes a request, tracks an event</span></div>
+  <div class="arrow" aria-hidden="true">→</div>
+  <div class="box"><b>Capture</b><span>a hook hands the raw data to Peek (~1 µs)</span></div>
+  <div class="arrow" aria-hidden="true">→</div>
+  <div class="box hl"><b>Background queue</b><span>redact, check, convert</span></div>
+  <div class="arrow" aria-hidden="true">→</div>
+  <div class="box"><b>Record store</b><span>bounded, in memory</span></div>
+  <div class="arrow" aria-hidden="true">→</div>
+  <div class="box"><b>UI</b><span>button + panel, refreshed ≤ 4×/s</span></div>
+</div>
+<ul>
+  <li><b>Nothing is written to disk.</b> Data lives only while the app runs.</li>
+  <li><b>The app is never slowed down.</b> The calling thread only enqueues; all work happens on a background queue.</li>
+  <li><b>The UI never blocks capture.</b> It reads snapshots and is told when something changed.</li>
+</ul>
+
+<h2 id="modules"><span class="n">3</span>The two modules</h2>
+<div class="grid2">
+  <div class="card">
+    <h3>PeekCore</h3>
+    <ul>
+      <li>Foundation only: no UIKit, no SwiftUI.</li>
+      <li>Capture, records, storage, redaction, checks, exports.</li>
+      <li>Runs on macOS too, so its tests run fast with <code>swift test</code>.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Peek</h3>
+    <ul>
+      <li>The UI: floating button, panel, lists, detail screens.</li>
+      <li>The public entry point: <code>Inspector</code>.</li>
+      <li>Depends on PeekCore and re-exports it.</li>
+    </ul>
+  </div>
+</div>
+<pre><code>Inspector.start()                    // show the button, start capturing
+Inspector.capture                    // HTTP input
+Inspector.socketCapture              // socket input
+Inspector.eventCapture               // analytics input
+Inspector.http / .sockets / .events  // the three stores</code></pre>
+
+<h2 id="inputs"><span class="n">4</span>How data gets in</h2>
+<p>There are two kinds of input: <b>automatic</b> (Peek hooks the system or an SDK) and <b>explicit</b> (your code calls Peek).</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Source</th><th>How</th><th>Setup</th></tr></thead>
+  <tbody>
+  <tr><td><code>URLSession</code> requests</td><td>Swizzles <code>dataTask(with:completionHandler:)</code> and <code>uploadTask</code>. Wraps the completion handler; adds a per-task delegate for timing.</td><td>Automatic, opt-in: <code>capturesAllURLSessionTraffic: true</code></td></tr>
+  <tr><td>Your networking layer</td><td>Your logger calls <code>capture.started</code>, <code>.finished</code>, <code>.timing</code>.</td><td>A few lines. Gives retries, decoding errors and modules.</td></tr>
+  <tr><td>Sockets</td><td>Your socket client's event handler calls <code>socketCapture.record</code>.</td><td>A few lines.</td></tr>
+  <tr><td>Analytics events</td><td>Your analytics layer calls <code>eventCapture.track</code>, one delivery per destination.</td><td>A few lines.</td></tr>
+  <tr><td>Identity, logs, errors</td><td><code>eventCapture.record(.identity / .log / .error, …)</code></td><td>One line per call site.</td></tr>
+  <tr><td>Firebase / Sentry calls you don't own</td><td>Swizzles <code>FIRAnalytics logEventWithName:</code> and Sentry's <code>capture…:withScope:</code>, found by class name.</td><td>Automatic: <code>DirectSDKCapture.install(…)</code></td></tr>
+  </tbody>
+</table></div>
+<div class="note">
+  <b>Why swizzling is safe here:</b> the original method is always called with the same arguments, so the app and the SDK behave exactly as before. If an SDK isn't linked, its hook is simply skipped.
+</div>
+
+<h2 id="request"><span class="n">5</span>Life of one request</h2>
+<ol>
+  <li><b>Start.</b> The app sends <code>POST /login</code>. The hook calls <code>capture.started(id, url, headers, body)</code>.</li>
+  <li><b>Hand-off.</b> Peek reads the current redaction rules, then puts the work on its serial background queue and returns. The app continues.</li>
+  <li><b>Build the record.</b> On the queue, Peek makes an <code>HTTPRecord</code> with two copies: the <b>redacted</b> one and the <b>original</b> one.</li>
+  <li><b>Store.</b> The record goes into the HTTP store. Observers get a "something changed" tick.</li>
+  <li><b>Response.</b> The completion handler fires. <code>capture.finished(id, status, headers, body, error)</code> updates the same record by <code>id</code>.</li>
+  <li><b>Timing.</b> URLSession reports metrics (DNS, connect, TLS, waiting, download). <code>capture.timing(id, …)</code> adds the waterfall.</li>
+  <li><b>Show.</b> The open list refreshes (at most 4 times per second) and the new row appears.</li>
+</ol>
+<p>Retries of one logical call share a <code>correlationID</code>, so the detail screen shows "attempt 2 of 3".</p>
+
+<h2 id="store"><span class="n">6</span>Where records live</h2>
+<ul>
+  <li>Each kind has its own <b><code>RecordStore</code></b>: HTTP, sockets, events.</li>
+  <li><b>Bounded by count and by bytes.</b> HTTP: 1,000 records or 25 MB. Sockets: 2,000 or 10 MB. Events: 2,000 or 5 MB.</li>
+  <li>When full, the <b>oldest records are dropped first</b>.</li>
+  <li>Bodies larger than 1 MB are <b>truncated</b>, cut on a UTF-8 character boundary so text stays readable.</li>
+  <li>Thread safety: one small lock (<code>OSAllocatedUnfairLock</code>) around the array.</li>
+  <li>Change notifications: an <code>AsyncStream</code> per screen that <b>coalesces</b>. A slow screen sees one pending tick, never a backlog.</li>
+  <li>Stores start <b>paused</b> and only open after <code>Inspector.start</code> passes its checks.</li>
+  <li><b>Pause</b> stops new requests but still completes the ones already in flight. <b>Clear</b> empties everything.</li>
+</ul>
+
+<h2 id="redaction"><span class="n">7</span>Redaction</h2>
+<h3>Two copies of everything</h3>
+<ul>
+  <li>Every record keeps a <b>redacted copy</b> (shown by default) and the <b>original values</b> (in memory only).</li>
+  <li>The <b>Redact secrets</b> switch picks which copy the panel shows and exports.</li>
+  <li>Turning it off reveals everything already captured; turning it on hides it again.</li>
+  <li>The switch resets to "on" at every launch.</li>
+</ul>
+<h3>What is masked</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>Where</th><th>Rule</th></tr></thead>
+  <tbody>
+  <tr><td>Headers</td><td>Name patterns: <code>*authorization</code>, <code>cookie</code>, <code>*token*</code>, <code>*secret*</code>, <code>*apikey</code>, …</td></tr>
+  <tr><td>JSON keys, query items, form fields</td><td><code>*token*</code>, <code>*password*</code>, <code>*secret*</code>, <code>otp</code>, <code>pin</code>, <code>card*</code>, <code>cvv</code>, … (case, <code>_</code> and <code>-</code> ignored)</td></tr>
+  <tr><td>Any text</td><td><code>Bearer …</code>, JWTs (<code>eyJ…</code>), emails, phone numbers</td></tr>
+  <tr><td>JSON inside a string</td><td>Parsed and redacted too (e.g. an echoed request body)</td></tr>
+  <tr><td>Very large bodies (&gt; 5 MB)</td><td>Not parsed; replaced by a size note, so nothing leaks</td></tr>
+  </tbody>
+</table></div>
+<p>Copies go to the <b>local</b> pasteboard only (no Universal Clipboard) and expire after 10 minutes. Shared files are encrypted on disk and deleted when the share sheet closes.</p>
+
+<h2 id="events"><span class="n">8</span>Analytics events and checks</h2>
+<ul>
+  <li>An <code>EventRecord</code> holds: name, source type, kind, and one <b>delivery per destination</b> (name + typed properties).</li>
+  <li><b>Kinds:</b> event, screen view, identity, log, error.</li>
+  <li><b>Dropped destinations</b> (asked for, but the app has no tracker) are shown struck through.</li>
+  <li>Values are typed the way SDKs see them: string, int, double, bool, or "other" (arrays, dates…).</li>
+</ul>
+<h3>Checks (warnings never change the payload)</h3>
+<div class="tablewrap"><table>
+  <thead><tr><th>Check</th><th>Example warning</th></tr></thead>
+  <tbody>
+  <tr><td>Firebase rules</td><td>Name over 40 chars, reserved name or prefix, &gt; 25 params, value &gt; 100 chars</td></tr>
+  <tr><td>CleverTap limits</td><td>Forbidden characters in the name, value &gt; 512 chars, &gt; 256 properties</td></tr>
+  <tr><td>Adjust</td><td>Name doesn't look like a 6-character event token</td></tr>
+  <tr><td>Types</td><td>Array or date sent where SDKs expect simple values; a property changing type between sends</td></tr>
+  <tr><td>Personal data</td><td>Keys like <code>password</code>, <code>phone</code>, <code>email</code>; values that look like a token, URL, email or phone</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="ui"><span class="n">9</span>The UI</h2>
+<h3>Floating button</h3>
+<ul>
+  <li>Lives in its <b>own window</b> above the app (one per scene), so it never touches your view hierarchy.</li>
+  <li>The window only claims touches <b>on the button</b>; everything else passes through to the app.</li>
+  <li>Drag to move, snaps to an edge, docks half-hidden when idle, drag onto ✕ to hide.</li>
+  <li>Badge shows new failures and warnings. Long-press for quick actions (copy last cURL, pause, clear).</li>
+</ul>
+<h3>Panel</h3>
+<ul>
+  <li>A SwiftUI sheet (half or full height) with one tab per tool: <b>Network</b> and <b>Events</b>.</li>
+  <li>Screens read <b>snapshots</b> from the stores; filtering and search run in the model, never in the view body.</li>
+  <li>Search is debounced; body search starts at 3 characters.</li>
+  <li>Always dark, with its own colours, so it looks the same in any host app.</li>
+  <li>Accessibility: VoiceOver labels and actions, Dynamic Type, 44 pt targets, Reduce Motion.</li>
+</ul>
+
+<h2 id="prod"><span class="n">10</span>Staying out of production</h2>
+<p>Four layers, from strongest to backstop:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>#</th><th>Layer</th><th>What it does</th></tr></thead>
+  <tbody>
+  <tr><td>1</td><td><code>PEEK_DISABLED</code> flag</td><td>Every source file is wrapped in <code>#if !PEEK_DISABLED</code>. Set it on release builds and Peek compiles to <b>nothing</b>.</td></tr>
+  <tr><td>2</td><td>Your own call site</td><td>Call <code>Inspector.start</code> only in debug/QA builds (e.g. inside <code>#if DEBUG</code>).</td></tr>
+  <tr><td>3</td><td>Runtime gate</td><td><code>Inspector.start</code> refuses when <code>isProductionEnvironment</code> is true, the bundle id isn't allowed, or it's an App Store install.</td></tr>
+  <tr><td>4</td><td>Guard script</td><td><code>Scripts/verify_no_peek.sh</code> scans the built app's binaries and <b>fails CI</b> if any Peek code is inside.</td></tr>
+  </tbody>
+</table></div>
+<div class="note warn">
+  <b>Trade-off:</b> Peek compiles by default so any app can use it. A build that forgets <code>PEEK_DISABLED</code> would include it; layers 3 and 4 catch that, so run the guard on every release archive.
+</div>
+
+<h2 id="perf"><span class="n">11</span>Performance and memory</h2>
+<ul>
+  <li>Cost on the calling thread: <b>about 1 µs</b> per event (an enqueue).</li>
+  <li>Redaction regexes are compiled once; key checks are cached per body.</li>
+  <li>Memory is capped by the store limits (about 40 MB worst case, counting both copies).</li>
+  <li>The UI refreshes at most 4 times per second, however busy the app is.</li>
+  <li>No retain cycles: hooks capture what they need, not <code>self</code>; screens hold weak references to tasks.</li>
+</ul>
+
+<h2 id="yassir"><span class="n">12</span>How Yassir's apps use it</h2>
+<ul>
+  <li><b>Driver</b> adds Peek as a Swift package (Tuist). Production configurations define <code>PEEK_DISABLED</code> through an exhaustive switch, so a new environment must choose explicitly.</li>
+  <li><b>Rider</b> compiles Peek's source folders as its own framework targets, because Xcode can't pass the flag into a regular package.</li>
+  <li><b>Network:</b> YassirNetworking's logger feeds <code>Inspector.capture</code> (retries and decoding errors included).</li>
+  <li><b>Sockets:</b> YassirSocket's event sink feeds <code>Inspector.socketCapture</code>.</li>
+  <li><b>Analytics:</b> each app's analytics sink feeds <code>Inspector.eventCapture</code>; direct SDK calls (identity, Crashlytics, Datadog, Screeb…) are reported next to them.</li>
+  <li>The guard script runs on every Production build (Driver: Fastfile; Rider: a build phase).</li>
+</ul>
+
+<h2 id="tests"><span class="n">13</span>Tests and CI</h2>
+<ul>
+  <li><b>76 tests</b> in PeekCore: stores, capture, redaction, exports (cURL, HAR), event checks, swizzled capture with fake SDK classes.</li>
+  <li>GitHub Actions on every push: tests on macOS, an iOS build, and a check that a <code>PEEK_DISABLED</code> build contains no Peek symbols.</li>
+  <li>The <code>Example/</code> app sends real requests and sample events, for trying it by hand.</li>
+</ul>
+
+<h2 id="files"><span class="n">14</span>File map</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>File</th><th>Role</th></tr></thead>
+  <tbody>
+  <tr><td colspan="2"><b>PeekCore</b></td></tr>
+  <tr><td><code>RecordStore.swift</code></td><td>Bounded, thread-safe store + change stream</td></tr>
+  <tr><td><code>HTTPRecord.swift</code> · <code>HTTPCapture.swift</code></td><td>Request model; turns start/finish/timing into records</td></tr>
+  <tr><td><code>SocketRecord.swift</code></td><td>Socket model and capture</td></tr>
+  <tr><td><code>EventRecord.swift</code> · <code>EventCapture.swift</code></td><td>Event model, capture, SDK and personal-data checks</td></tr>
+  <tr><td><code>URLSessionCapture.swift</code></td><td>Automatic URLSession capture (swizzling)</td></tr>
+  <tr><td><code>DirectSDKCapture.swift</code></td><td>Automatic Firebase and Sentry capture (swizzling)</td></tr>
+  <tr><td><code>Redactor.swift</code> · <code>RedactionPolicy.swift</code></td><td>Masking rules; the on/off switch</td></tr>
+  <tr><td><code>InspectorGate.swift</code></td><td>Runtime production check</td></tr>
+  <tr><td><code>Exports.swift</code> · <code>Reports.swift</code></td><td>cURL, HAR, Markdown, JSON</td></tr>
+  <tr><td><code>NetworkQuery.swift</code> · <code>JSONTree.swift</code></td><td>Search tokens; JSON tree for the body viewer</td></tr>
+  <tr><td colspan="2"><b>Peek</b></td></tr>
+  <tr><td><code>Inspector.swift</code></td><td>Public entry point, configuration, start</td></tr>
+  <tr><td><code>OverlayWindow.swift</code> · <code>OverlayController.swift</code></td><td>Button window per scene; opening the panel</td></tr>
+  <tr><td><code>FloatingButtonView.swift</code> · <code>PanelView.swift</code></td><td>Button look; panel with tabs</td></tr>
+  <tr><td><code>Network/…</code></td><td>Request list, detail, body viewer, timing, sockets, sharing</td></tr>
+  <tr><td><code>Events/…</code></td><td>Events list and detail</td></tr>
+  </tbody>
+</table></div>
+
+</main>
+</body>
+</html>

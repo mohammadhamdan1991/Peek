@@ -42,6 +42,8 @@ struct PanelView: View {
         ToolbarItem(placement: .topBarLeading) {
             Text(model.environmentTag)
                 .font(.system(.caption2, design: .monospaced).weight(.medium))
+                .lineLimit(1)
+                .fixedSize() // toolbar items get squeezed; a tag like "DEMO" must stay whole
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Theme.accent.opacity(0.18), in: RoundedRectangle(cornerRadius: 5))

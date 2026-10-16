@@ -88,6 +88,14 @@ public struct Redactor: Sendable {
         case let array as [Any]:
             return array.map { redact(json: $0, verdicts: &verdicts) }
         case let string as String:
+            // JSON sent as a string (echo services, double-encoded payloads): redact its keys too.
+            if let first = string.first, first == "{" || first == "[",
+               let nested = try? JSONSerialization.jsonObject(with: Data(string.utf8)),
+               let data = try? JSONSerialization.data(
+                   withJSONObject: redact(json: nested, verdicts: &verdicts), options: [.sortedKeys, .withoutEscapingSlashes]
+               ) {
+                return String(decoding: data, as: UTF8.self)
+            }
             return redact(text: string)
         default:
             return json

@@ -1,21 +1,35 @@
 # Peek
 
-An in-app debugging panel for iOS: every network request, socket message and analytics event your app sends,
-in a floating panel you open on the device. Built for QA and developers who need to see *what the app actually
-did* without attaching a proxy or a debugger.
+**See everything your iOS app sends — without a proxy, a cable or a debugger.**
 
-- **Network:** requests and responses with headers, bodies (JSON tree, images, text), timing waterfall, retries
-  grouped, search (`status:5xx host:api method:post`), cURL / HAR / Markdown export.
-- **Sockets:** messages and connection changes, mixed into the same timeline.
-- **Events:** every analytics event per destination (Firebase, Amplitude, …), with checks for SDK limits
-  (Firebase name and parameter rules, CleverTap limits, Adjust tokens), wrong types and personal data. Plus
-  identity calls, logs and errors.
-- **Redaction:** tokens, passwords, cookies, emails and phone numbers are masked by default; one switch reveals
-  the real values (kept in memory only) when you need a working cURL.
-- **Zero-setup capture** for `URLSession` (completion-handler tasks), Firebase `logEvent` and Sentry, including calls
-  made inside third-party packages.
+Peek is an in-app inspector: a floating button that opens a panel with every network request, socket message and
+analytics event your app produced, as it happens. Built for QA and developers testing on real devices.
 
-Requires iOS 16.6+. No dependencies.
+<p align="center">
+  <img src="docs/screenshots/button.png" width="200" alt="Peek panel opened over an app">
+  <img src="docs/screenshots/network.png" width="200" alt="Network list">
+  <img src="docs/screenshots/request.png" width="200" alt="Request detail with a redacted body">
+</p>
+<p align="center">
+  <img src="docs/screenshots/timeline.png" width="200" alt="Requests and analytics events in one timeline">
+  <img src="docs/screenshots/events.png" width="200" alt="Events list">
+  <img src="docs/screenshots/event.png" width="200" alt="Event detail with an SDK-limit warning">
+</p>
+
+## Features
+
+| | |
+|---|---|
+| **Network** | Every request with headers, body (JSON tree, images, text), status, size and a timing waterfall (DNS, TLS, waiting…). Retries grouped. Search like `status:5xx host:api method:post`. |
+| **Sockets** | Messages and connection changes, in the same timeline as requests. |
+| **Analytics events** | Each event per destination (Firebase, Amplitude, …) with its properties and types. Warnings for SDK limits (Firebase names and 100-char values, CleverTap limits, Adjust tokens), wrong types and personal data. Identity calls, logs and errors too. |
+| **One timeline** | “+ Events” mixes events into the request list, so you see which call triggered which event. |
+| **Redaction** | Tokens, passwords, cookies, emails and phone numbers are masked by default, even inside nested JSON. One switch reveals the real values (kept in memory only) when you need a working cURL. |
+| **Share** | Copy as cURL, export HAR (Charles, Proxyman, Chrome), Markdown reports for Jira or Slack, JSON. |
+| **Zero-setup capture** | `URLSession` traffic, Firebase `logEvent` and Sentry captures — including calls made inside third-party packages. |
+| **Light** | No dependencies. Capture costs about a microsecond on the calling thread; everything else runs in the background. |
+
+Requires iOS 16.6+.
 
 ## Install
 
