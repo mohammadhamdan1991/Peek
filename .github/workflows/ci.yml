@@ -1,0 +1,19 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests (macOS)
+        run: swift test
+      - name: Build for iOS
+        run: xcodebuild build -scheme Peek -destination 'generic/platform=iOS Simulator' -quiet
+      - name: PEEK_DISABLED compiles to nothing
+        run: |
+          swift build -Xswiftc -DPEEK_DISABLED --build-path .build-disabled
+          ! find .build-disabled -path '*Peek*.build*' -name '*.o' -exec nm {} \; 2>/dev/null | grep -qE 's4Peek|8PeekCore'
