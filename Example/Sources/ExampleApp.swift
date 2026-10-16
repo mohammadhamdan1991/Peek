@@ -26,6 +26,9 @@ struct ContentView: View {
                     }
                     Button("GET 404") { send("https://httpbin.org/status/404") }
                     Button("GET 503") { send("https://httpbin.org/status/503") }
+                    Button("async GET (try await data(for:))") {
+                        Task { _ = try? await URLSession.shared.data(for: URLRequest(url: URL(string: "https://httpbin.org/uuid")!)) }
+                    }
                 }
 
                 Section("Analytics (what your analytics layer reports)") {

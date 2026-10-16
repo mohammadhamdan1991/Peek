@@ -2,15 +2,19 @@
 import Foundation
 import ObjectiveC
 
-/// Captures every completion-handler `URLSession` task in the app, with no change to the networking code:
-/// third-party SDKs, image loading, or a networking layer that has no inspector hooks.
+/// Captures `URLSession` requests in the app, with no change to the networking code: completion-handler tasks
+/// and the `async` APIs (`data(for:)`, `data(from:)`, `upload(for:from:)`, `upload(for:fromFile:)`).
 ///
-/// How: swizzles `dataTask(with:completionHandler:)` and `uploadTask(with:from:completionHandler:)` to wrap
-/// the handler, and sets a per-task delegate for timing. Requests are sent exactly as before (same session,
-/// same delegate, same TLS handling), unlike a URLProtocol, which re-sends them on its own session.
+/// How: wraps the completion handler at the point each task is created, and sets a per-task delegate for timing.
+/// Requests are sent exactly as before (same session, same delegate, same TLS handling), unlike a URLProtocol,
+/// which re-sends them on its own session.
+/// - Completion-handler APIs: swizzles `dataTask(with:completionHandler:)` and `uploadTask(with:from:completionHandler:)`.
+/// - `async` APIs are Swift-only, but Foundation implements them on private `NSURLSession` methods that take a
+///   completion handler (`_dataTaskWithRequest:delegate:completionHandler:` and siblings). Those are hooked by
+///   name; if a future OS renames them, async capture is skipped and nothing else changes.
 ///
-/// Not seen: `async` APIs (`data(for:)`), delegate-only tasks (no completion handler), retries grouped as one
-/// call, decoding errors. Don't combine with your own `Inspector.capture` feed: its requests would show twice.
+/// Not seen: delegate-only tasks (no completion handler), `bytes(for:)` streams, retries grouped as one call,
+/// decoding errors. Don't combine with your own `Inspector.capture` feed: its requests would show twice.
 public enum URLSessionCapture {
     // Written once in `install`, before the swizzle makes it reachable; read-only afterwards.
     nonisolated(unsafe) static var capture: HTTPCapture?
@@ -30,6 +34,75 @@ public enum URLSessionCapture {
                 #selector(URLSession.yi_dataTask(with:completionHandler:)))
         swizzle(sessionClass, #selector(URLSession.uploadTask(with:from:completionHandler:) as (URLSession) -> (URLRequest, Data?, @escaping @Sendable (Data?, URLResponse?, Error?) -> Void) -> URLSessionUploadTask),
                 #selector(URLSession.yi_uploadTask(with:from:completionHandler:)))
+        hookAsyncEntryPoints()
+    }
+
+    // MARK: async APIs
+
+    typealias ObjCCompletion = @convention(block) @Sendable (Data?, URLResponse?, Error?) -> Void
+    /// Set while a public completion-handler method runs, in case it creates its task through the private one:
+    /// the request is then already being captured and mustn't show twice.
+    private static let reentryKey = "Peek.URLSessionCapture.inPublicCall"
+    static var isInPublicCall: Bool { Thread.current.threadDictionary[reentryKey] as? Bool ?? false }
+    static func publicCall<T>(_ body: () -> T) -> T {
+        Thread.current.threadDictionary[reentryKey] = true
+        defer { Thread.current.threadDictionary[reentryKey] = nil }
+        return body()
+    }
+
+    private static func hookAsyncEntryPoints() {
+        // (request or URL, delegate, completion)
+        for name in ["_dataTaskWithRequest:delegate:completionHandler:", "_dataTaskWithURL:delegate:completionHandler:"] {
+            let selector = NSSelectorFromString(name)
+            typealias Fn = @convention(c) (AnyObject, Selector, AnyObject, AnyObject?, ObjCCompletion?) -> AnyObject
+            replaceMethod(selector, as: Fn.self) { original in
+                let block: @convention(block) (AnyObject, AnyObject, AnyObject?, ObjCCompletion?) -> AnyObject = { session, target, delegate, done in
+                    let (completion, finish) = wrapAsync(session, target, body: nil, done)
+                    return finish(original(session, selector, target, delegate, completion))
+                }
+                return block
+            }
+        }
+        // (request, data or file URL, delegate, completion)
+        for (name, carriesData) in [("_uploadTaskWithRequest:fromData:delegate:completionHandler:", true),
+                                    ("_uploadTaskWithRequest:fromFile:delegate:completionHandler:", false)] {
+            let selector = NSSelectorFromString(name)
+            typealias Fn = @convention(c) (AnyObject, Selector, AnyObject, AnyObject?, AnyObject?, ObjCCompletion?) -> AnyObject
+            replaceMethod(selector, as: Fn.self) { original in
+                let block: @convention(block) (AnyObject, AnyObject, AnyObject?, AnyObject?, ObjCCompletion?) -> AnyObject = { session, request, source, delegate, done in
+                    let body = carriesData ? source as? Data : nil
+                    let (completion, finish) = wrapAsync(session, request, body: body, done)
+                    return finish(original(session, selector, request, source, delegate, completion))
+                }
+                return block
+            }
+        }
+    }
+
+    /// The completion to pass on (wrapped when capturing), and what to do with the created task (start timing).
+    private static func wrapAsync(
+        _ sessionObject: AnyObject, _ target: AnyObject, body: Data?, _ done: ObjCCompletion?
+    ) -> (ObjCCompletion?, (AnyObject) -> AnyObject) {
+        let request: URLRequest? = switch target {
+        case let request as URLRequest: request
+        case let url as URL: URLRequest(url: url)
+        default: nil
+        }
+        guard !isInPublicCall, let session = sessionObject as? URLSession, let request, let done,
+              let (id, wrapped) = begin(session, request, body: body, { data, response, error in done(data, response, error) })
+        else { return (done, { $0 }) }
+        let completion: ObjCCompletion = { data, response, error in wrapped(data, response, error) }
+        return (completion, { task in
+            if let task = task as? URLSessionTask { observeMetrics(task, session: session, id: id) }
+            return task
+        })
+    }
+
+    /// Replaces an `NSURLSession` instance method, handing `makeBlock` the original implementation to call through to.
+    private static func replaceMethod<Original>(_ selector: Selector, as _: Original.Type, makeBlock: (Original) -> Any) {
+        guard let cls = NSClassFromString("NSURLSession"), let method = class_getInstanceMethod(cls, selector) else { return }
+        let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
+        method_setImplementation(method, imp_implementationWithBlock(makeBlock(original)))
     }
 
     private static func swizzle(_ cls: AnyClass, _ original: Selector, _ replacement: Selector) {
@@ -114,7 +187,7 @@ extension URLSession {
         guard let (id, wrapped) = URLSessionCapture.begin(self, request, body: nil, completionHandler) else {
             return yi_dataTask(with: request, completionHandler: completionHandler)
         }
-        let task = yi_dataTask(with: request, completionHandler: wrapped)
+        let task = URLSessionCapture.publicCall { yi_dataTask(with: request, completionHandler: wrapped) }
         URLSessionCapture.observeMetrics(task, session: self, id: id)
         return task
     }
@@ -123,7 +196,7 @@ extension URLSession {
         guard let (id, wrapped) = URLSessionCapture.begin(self, request, body: body, completionHandler) else {
             return yi_uploadTask(with: request, from: body, completionHandler: completionHandler)
         }
-        let task = yi_uploadTask(with: request, from: body, completionHandler: wrapped)
+        let task = URLSessionCapture.publicCall { yi_uploadTask(with: request, from: body, completionHandler: wrapped) }
         URLSessionCapture.observeMetrics(task, session: self, id: id)
         return task
     }

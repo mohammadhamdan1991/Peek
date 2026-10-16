@@ -550,6 +550,38 @@ final class StubProtocol: URLProtocol {
         #expect(Self.store.records.first?.requestBody?.data == Data(#"{"name":"ali"}"#.utf8))
     }
 
+    @Test func capturesAsyncAPIsOnceWithTheirBodies() async throws {
+        URLSessionCapture.install(Self.capture)
+        Self.store.clear()
+        let session = session()
+        var request = URLRequest(url: URL(string: "https://example.com/async/data")!)
+        request.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await session.data(for: request)
+        #expect(data == Data(#"{"ok":true}"#.utf8))                    // the caller's result is untouched
+        #expect((response as? HTTPURLResponse)?.statusCode == 200)
+        _ = try await session.data(from: URL(string: "https://example.com/async/url")!)
+        var upload = URLRequest(url: URL(string: "https://example.com/async/upload")!)
+        upload.httpMethod = "POST"
+        _ = try await session.upload(for: upload, from: Data(#"{"name":"ali"}"#.utf8))
+        Self.capture.flush()
+
+        let byPath = Dictionary(grouping: Self.store.records, by: \.url.path)
+        #expect(Self.store.records.count == 3)                          // once each, never twice
+        #expect(byPath["/async/data"]?.first?.statusCode == 200)
+        #expect(byPath["/async/data"]?.first?.responseBody?.data == Data(#"{"ok":true}"#.utf8))
+        #expect(byPath["/async/data"]?.first?.requestHeaders["Authorization"] == Redactor.mask)
+        #expect(byPath["/async/url"]?.first?.statusCode == 200)
+        #expect(byPath["/async/upload"]?.first?.requestBody?.data == Data(#"{"name":"ali"}"#.utf8))
+    }
+
+    @Test func completionHandlerTasksStillRecordOnce() async throws {
+        URLSessionCapture.install(Self.capture)
+        Self.store.clear()
+        _ = await run(session(), URLRequest(url: URL(string: "https://example.com/handler")!))
+        Self.capture.flush()
+        #expect(Self.store.records.count == 1)
+    }
+
     /// A session delegate that collects metrics keeps getting them: the inspector steps aside.
     @Test func leavesTheSessionDelegatesMetricsAlone() async throws {
         final class Delegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
