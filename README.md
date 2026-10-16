@@ -26,7 +26,7 @@ analytics event your app produced, as it happens. Built for QA and developers te
 | **One timeline** | “+ Events” mixes events into the request list, so you see which call triggered which event. |
 | **Redaction** | Tokens, passwords, cookies, emails and phone numbers are masked by default, even inside nested JSON. One switch reveals the real values (kept in memory only) when you need a working cURL. |
 | **Share** | Copy as cURL, export HAR (Charles, Proxyman, Chrome), Markdown reports for Jira or Slack, JSON. |
-| **Zero-setup capture** | `URLSession` traffic — `async`/`await` (`data(for:)`, `upload(for:)`) and completion handlers — plus Firebase `logEvent` and Sentry, including calls made inside third-party packages. |
+| **Zero-setup capture** | `URLSession` traffic — `async`/`await`, completion handlers and delegate-based sessions like Alamofire — plus Firebase `logEvent` and Sentry, including calls made inside third-party packages. |
 | **Light** | No dependencies. Capture costs about a microsecond on the calling thread; everything else runs in the background. |
 
 Requires iOS 16.6+.
@@ -77,7 +77,7 @@ Peek is a debugging tool: don't ship it to your users. Pick one:
 
 | What | How |
 |---|---|
-| `URLSession` traffic | `capturesAllURLSessionTraffic: true`: `async` `data(for:)` / `data(from:)` / `upload(for:)` and completion-handler `dataTask` / `uploadTask`. Not covered: delegate-only tasks and `bytes(for:)` streams. |
+| `URLSession` traffic | `capturesAllURLSessionTraffic: true`: `async` `data(for:)` / `data(from:)` / `upload(for:)`, completion-handler tasks, and delegate-based sessions such as **Alamofire** (requests still go through your session and its delegate, SSL pinning included). Not covered: `bytes(for:)` streams. |
 | Your own networking layer | call `Inspector.capture.started(...)`, `.finished(...)`, `.timing(...)` from its logger: retries, decoding errors and modules show up |
 | Sockets | `Inspector.socketCapture.record(...)` from your socket client's event handler |
 | Analytics | `Inspector.eventCapture.track(source:deliveries:...)` from your analytics layer, one delivery per destination |

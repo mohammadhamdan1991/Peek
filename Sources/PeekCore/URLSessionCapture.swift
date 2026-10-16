@@ -13,8 +13,9 @@ import ObjectiveC
 ///   completion handler (`_dataTaskWithRequest:delegate:completionHandler:` and siblings). Those are hooked by
 ///   name; if a future OS renames them, async capture is skipped and nothing else changes.
 ///
-/// Not seen: delegate-only tasks (no completion handler), `bytes(for:)` streams, retries grouped as one call,
-/// decoding errors. Don't combine with your own `Inspector.capture` feed: its requests would show twice.
+/// Delegate-based sessions (Alamofire, custom `URLSessionDelegate`s): see `URLSessionDelegateCapture`.
+///
+/// Not seen: `bytes(for:)` streams, retries grouped as one call, decoding errors. Don't combine with your own `Inspector.capture` feed: its requests would show twice.
 public enum URLSessionCapture {
     // Written once in `install`, before the swizzle makes it reachable; read-only afterwards.
     nonisolated(unsafe) static var capture: HTTPCapture?
@@ -35,6 +36,7 @@ public enum URLSessionCapture {
         swizzle(sessionClass, #selector(URLSession.uploadTask(with:from:completionHandler:) as (URLSession) -> (URLRequest, Data?, @escaping @Sendable (Data?, URLResponse?, Error?) -> Void) -> URLSessionUploadTask),
                 #selector(URLSession.yi_uploadTask(with:from:completionHandler:)))
         hookAsyncEntryPoints()
+        URLSessionDelegateCapture.install()
     }
 
     // MARK: async APIs
@@ -148,6 +150,7 @@ public enum URLSessionCapture {
     /// Timing via the task's own delegate, so the session's delegate is left alone. Skipped when the task
     /// already has one, or the session delegate collects metrics itself (it would stop getting them).
     static func observeMetrics(_ task: URLSessionTask, session: URLSession, id: UUID) {
+        URLSessionDelegateCapture.markCaptured(task) // already recorded here; the delegate hook must not repeat it
         guard let capture, task.delegate == nil,
               (session.delegate as? NSObject)?.responds(to: #selector(URLSessionTaskDelegate.urlSession(_:task:didFinishCollecting:))) != true
         else { return }
@@ -163,21 +166,26 @@ public enum URLSessionCapture {
         }
 
         func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) {
-            guard let transaction = metrics.transactionMetrics.last else { return }
-            func interval(_ start: Date?, _ end: Date?) -> DateInterval? {
-                guard let start, let end, end >= start else { return nil }
-                return DateInterval(start: start, end: end)
-            }
-            capture.timing(id: id, HTTPTiming(
-                domainLookup: interval(transaction.domainLookupStartDate, transaction.domainLookupEndDate),
-                connect: interval(transaction.connectStartDate, transaction.connectEndDate),
-                secureConnection: interval(transaction.secureConnectionStartDate, transaction.secureConnectionEndDate),
-                request: interval(transaction.requestStartDate, transaction.requestEndDate),
-                response: interval(transaction.responseStartDate, transaction.responseEndDate),
-                networkProtocol: transaction.networkProtocolName,
-                isReusedConnection: transaction.isReusedConnection
-            ))
+            capture.timing(id: id, URLSessionCapture.timing(from: metrics))
         }
+    }
+
+    /// The waterfall phases of the last transaction (the one that produced the response).
+    static func timing(from metrics: URLSessionTaskMetrics) -> HTTPTiming {
+        let transaction = metrics.transactionMetrics.last
+        func interval(_ start: Date?, _ end: Date?) -> DateInterval? {
+            guard let start, let end, end >= start else { return nil }
+            return DateInterval(start: start, end: end)
+        }
+        return HTTPTiming(
+            domainLookup: interval(transaction?.domainLookupStartDate, transaction?.domainLookupEndDate),
+            connect: interval(transaction?.connectStartDate, transaction?.connectEndDate),
+            secureConnection: interval(transaction?.secureConnectionStartDate, transaction?.secureConnectionEndDate),
+            request: interval(transaction?.requestStartDate, transaction?.requestEndDate),
+            response: interval(transaction?.responseStartDate, transaction?.responseEndDate),
+            networkProtocol: transaction?.networkProtocolName,
+            isReusedConnection: transaction?.isReusedConnection ?? false
+        )
     }
 }
 

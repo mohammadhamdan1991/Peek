@@ -589,6 +589,59 @@ final class StubProtocol: URLProtocol {
         #expect(Self.store.records.count == 1)
     }
 
+    /// Alamofire's pattern: a delegate that gets the data and the completion itself, no completion handler.
+    final class StreamingDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+        var received = Data(), completions = 0, metrics = 0
+        var done: CheckedContinuation<Void, Never>?
+        func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) { received.append(data) }
+        func urlSession(_ session: URLSession, task: URLSessionTask, didFinishCollecting metrics: URLSessionTaskMetrics) { self.metrics += 1 }
+        func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+            completions += 1
+            done?.resume()
+        }
+    }
+
+    @Test func capturesDelegateSessionsAndLeavesTheDelegateWhole() async throws {
+        URLSessionCapture.install(Self.capture)
+        Self.store.clear()
+        let delegate = StreamingDelegate()
+        let session = session(delegate: delegate)
+        var request = URLRequest(url: URL(string: "https://example.com/alamofire-style")!)
+        request.setValue("Bearer secret", forHTTPHeaderField: "Authorization")
+        await withCheckedContinuation { continuation in
+            delegate.done = continuation
+            session.dataTask(with: request).resume()
+        }
+        try await Task.sleep(for: .milliseconds(100))
+        Self.capture.flush()
+
+        #expect(delegate.received == Data(#"{"ok":true}"#.utf8))   // the delegate still gets everything
+        #expect(delegate.completions == 1)
+        #expect(delegate.metrics == 1)
+        let record = try #require(Self.store.records.first)
+        #expect(Self.store.records.count == 1)
+        #expect(record.statusCode == 200)
+        #expect(record.responseBody?.data == Data(#"{"ok":true}"#.utf8))
+        #expect(record.requestHeaders["Authorization"] == Redactor.mask)
+        #expect(record.timing != nil && record.duration != nil)
+    }
+
+    /// What DebugSwift does: a URLProtocol that re-sends each request on a session it is the delegate of.
+    @Test func ignoresAnotherToolsReSends() {
+        let request = URLRequest(url: URL(string: "https://example.com/resent")!)
+        #expect(!URLSessionDelegateCapture.shouldObserve(URLProtocol(request: request, cachedResponse: nil, client: nil)))
+        #expect(URLSessionDelegateCapture.shouldObserve(StreamingDelegate()))
+    }
+
+    @Test func completionHandlerTaskOnADelegateSessionRecordsOnce() async throws {
+        URLSessionCapture.install(Self.capture)
+        Self.store.clear()
+        _ = await run(session(delegate: StreamingDelegate()), URLRequest(url: URL(string: "https://example.com/both")!))
+        try await Task.sleep(for: .milliseconds(100))
+        Self.capture.flush()
+        #expect(Self.store.records.count == 1)
+    }
+
     /// A session delegate that collects metrics keeps getting them: the inspector steps aside.
     @Test func leavesTheSessionDelegatesMetricsAlone() async throws {
         final class Delegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
