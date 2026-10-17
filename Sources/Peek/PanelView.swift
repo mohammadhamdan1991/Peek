@@ -11,6 +11,7 @@ struct PanelView: View {
     let close: () -> Void
 
     @State private var selection = 0
+    @State private var appearance = Appearance.current
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -29,6 +30,7 @@ struct PanelView: View {
             }
         }
         .tint(Theme.accent)
+        .onChange(of: appearance) { Appearance.current = $0 }
         .overlay(alignment: .bottom) { ToastView() }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.3), value: Toast.shared.message)
     }
@@ -67,6 +69,12 @@ struct PanelView: View {
                 Toggle(isOn: $model.isRedactionEnabled) {
                     Label("Redact secrets", systemImage: model.isRedactionEnabled ? "lock.fill" : "lock.open")
                 }
+                Picker(selection: $appearance) {
+                    ForEach(Appearance.allCases, id: \.self) { Text($0.title).tag($0) }
+                } label: {
+                    Label("Appearance", systemImage: "circle.lefthalf.filled")
+                }
+                .pickerStyle(.menu)
                 Button(role: .destructive, action: clear) {
                     Label("Clear all", systemImage: "trash")
                 }

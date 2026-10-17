@@ -103,7 +103,7 @@ final class OverlayController: NSObject, UIAdaptivePresentationControllerDelegat
             clear: { Inspector.clearAll() },
             close: { [weak self] in self?.dismissPanel() }
         ))
-        panel.overrideUserInterfaceStyle = .dark
+        panel.overrideUserInterfaceStyle = Appearance.current.style
         panel.modalPresentationStyle = .pageSheet
         if let sheet = panel.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
@@ -143,14 +143,22 @@ final class PanelHostingController: UIHostingController<PanelView> {
 
     private static var didReset = false
 
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        // Appearance can change while the panel is open, from its own menu.
+        NotificationCenter.default.addObserver(forName: Appearance.didChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.overrideUserInterfaceStyle = Appearance.current.style }
+        }
+    }
+
     static func resetHostAppearance() {
         guard !didReset else { return }
         didReset = true
         let bar = UINavigationBar.appearance(whenContainedInInstancesOf: [PanelHostingController.self])
         let appearance = UINavigationBarAppearance()
         appearance.configureWithDefaultBackground()
-        appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+        appearance.titleTextAttributes = [.foregroundColor: UIColor(Theme.text)]
+        appearance.largeTitleTextAttributes = [.foregroundColor: UIColor(Theme.text)]
         bar.standardAppearance = appearance
         bar.scrollEdgeAppearance = appearance
         bar.compactAppearance = appearance

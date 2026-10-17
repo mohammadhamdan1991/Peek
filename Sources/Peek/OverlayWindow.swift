@@ -95,9 +95,11 @@ final class OverlayViewController: UIViewController, UIContextMenuInteractionDel
         super.viewDidLoad()
         view.backgroundColor = .clear
 
+        // Like the button, always dark, whatever the host's mode or the panel's Appearance setting.
+        hideTarget.overrideUserInterfaceStyle = .dark
         hideTarget.tintColor = UIColor(Theme.failureText)
         hideTarget.contentMode = .center
-        hideTarget.layer.borderColor = UIColor(Theme.failureText).cgColor
+        hideTarget.layer.borderColor = UIColor(Theme.failureText).resolvedColor(with: UITraitCollection(userInterfaceStyle: .dark)).cgColor
         hideTarget.layer.borderWidth = 1.5
         hideTarget.layer.cornerRadius = 26
         hideTarget.backgroundColor = UIColor(Theme.ground).withAlphaComponent(0.6)
@@ -107,6 +109,7 @@ final class OverlayViewController: UIViewController, UIContextMenuInteractionDel
         view.addSubview(hideTarget)
 
         let host = UIHostingController(rootView: FloatingButtonView(model: model))
+        host.overrideUserInterfaceStyle = .dark
         host.view.backgroundColor = .clear
         host.view.isUserInteractionEnabled = false
         addChild(host)

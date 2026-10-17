@@ -14,7 +14,7 @@ struct TimingSection: View {
                 if let insight = insight(timing, total: total) {
                     Label(insight, systemImage: "exclamationmark.triangle")
                         .font(.footnote)
-                        .foregroundStyle(Color(hex: 0xF4DDB0))
+                        .foregroundStyle(Theme.warningText)
                         .padding(12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Theme.clientError.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))

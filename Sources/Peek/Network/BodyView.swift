@@ -39,7 +39,7 @@ struct BodyView: View {
                     viewer
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(hex: 0x121418), in: RoundedRectangle(cornerRadius: 12))
+                        .background(Theme.code, in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hairline))
                 }
                 .task(id: body) {
