@@ -3,7 +3,7 @@
 **See everything your iOS app sends — without a proxy, a cable or a debugger.**
 
 Peek is an in-app inspector: a floating button that opens a panel with every network request, socket message and
-analytics event your app produced, as it happens. Built for QA and developers testing on real devices.
+analytics event your app produced, as it happens, and the feature flags it read, which you can override on the spot. Built for QA and developers testing on real devices.
 
 <p align="center">
   <img src="docs/screenshots/button.png" width="200" alt="Peek panel opened over an app">
@@ -23,6 +23,7 @@ analytics event your app produced, as it happens. Built for QA and developers te
 | **Network** | Every request with headers, body (JSON tree, images, text), status, size and a timing waterfall (DNS, TLS, waiting…). Retries grouped. Search like `status:5xx host:api method:post`. |
 | **Sockets** | Messages and connection changes, in the same timeline as requests. |
 | **Analytics events** | Each event per destination (Firebase, Amplitude, …) with its properties and types. Warnings for SDK limits (Firebase names and 100-char values, CleverTap limits, Adjust tokens), wrong types and personal data. Identity calls, logs and errors too. |
+| **Feature flags** | Every flag your provider (LaunchDarkly, Firebase, your backend) holds, what the app read and how often. Override any of them on this device: a switch for booleans, a field for numbers and text, a JSON editor for objects. Overrides survive relaunch and never apply outside the inspector. |
 | **One timeline** | “+ Events” mixes events into the request list, so you see which call triggered which event. |
 | **Redaction** | Tokens, passwords, cookies, emails and phone numbers are masked by default, even inside nested JSON. One switch reveals the real values (kept in memory only) when you need a working cURL. |
 | **Share** | Copy as cURL, export HAR (Charles, Proxyman, Chrome), Markdown reports for Jira or Slack, JSON. |
@@ -82,6 +83,7 @@ Peek is a debugging tool: don't ship it to your users. Pick one:
 | Sockets | `Inspector.socketCapture.record(...)` from your socket client's event handler |
 | Analytics | `Inspector.eventCapture.track(source:deliveries:...)` from your analytics layer, one delivery per destination |
 | Identity, logs, errors | `Inspector.eventCapture.record(.identity / .log / .error, name, to: [...])` |
+| Feature flags | in your flag layer's read path, serve `Inspector.flags.override(for: key)` when it isn't nil and call `Inspector.flags.didRead(key, remote:, defaultValue:)`; list every flag with `Inspector.flags.setCatalog(source: "LaunchDarkly") { … }`; re-serve observers from `Inspector.flags.onOverrideChange { key in … }` |
 | Firebase / Sentry calls you don't own | `DirectSDKCapture.install(Inspector.eventCapture)`; wrap your own analytics forwarding in `DirectSDKCapture.whileForwarding { … }` |
 
 ## Example
