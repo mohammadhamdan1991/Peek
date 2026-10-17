@@ -4,8 +4,8 @@ import StoreKit
 import SwiftUI
 @_exported import PeekCore
 
-/// A screen in the inspector panel. The Network tool is built in; later phases (Events, Flags, ...)
-/// and host apps add theirs with `Inspector.register(_:)`.
+/// A screen in the inspector panel. Network, Events and Flags are built in; host apps add theirs
+/// with `Inspector.register(_:)`.
 @MainActor
 public protocol InspectorTool {
     var title: String { get }
@@ -64,9 +64,12 @@ public enum Inspector {
     public nonisolated static let events = RecordStore<EventRecord>(limits: .init(count: 2_000, bytes: 5 * 1_048_576))
     /// What an analytics sink feeds: checks, redacts and stores events into `events`.
     public nonisolated static let eventCapture = EventCapture(store: events, policy: redaction)
+    /// Feature flags the app read, and the overrides set in the Flags tab. The host's flag layer serves
+    /// `flags.override(for:)` and reports reads; overrides apply only once the runtime gate passes.
+    public nonisolated static let flags = FlagStore()
 
     public private(set) static var configuration: InspectorConfiguration?
-    static private(set) var tools: [any InspectorTool] = [NetworkTool(), EventsTool()]
+    static private(set) var tools: [any InspectorTool] = [NetworkTool(), EventsTool(), FlagsTool()]
     private static var controller: OverlayController?
     private static var isStarting = false
     private static let logger = Logger(subsystem: "dev.peek", category: "gate")
@@ -87,6 +90,7 @@ public enum Inspector {
         }
         func stayOff(_ decision: InspectorGate.Decision) {
             setCapturing(false)
+            flags.isEnabled = false
             clearAll()
             logger.notice("Peek stays off: \(String(describing: decision), privacy: .public)")
         }
@@ -97,6 +101,7 @@ public enum Inspector {
         redaction.setRedactor(configuration.redactor)
         redaction.isEnabled = configuration.redactsByDefault
         setCapturing(true)
+        flags.isEnabled = true // pausing capture leaves overrides on: only the gate turns them off
         if configuration.capturesAllURLSessionTraffic { URLSessionCapture.install(capture) }
         Task {
             let decision = evaluate(isAppStoreInstall: await isAppStoreInstall())
@@ -174,5 +179,13 @@ private struct EventsTool: InspectorTool {
     let systemImage = "waveform.path.ecg"
 
     func makeView() -> AnyView { AnyView(EventListView()) }
+}
+
+/// Built-in Flags tool (Phase 3).
+private struct FlagsTool: InspectorTool {
+    let title = "Flags"
+    let systemImage = "flag"
+
+    func makeView() -> AnyView { AnyView(FlagListView()) }
 }
 #endif
