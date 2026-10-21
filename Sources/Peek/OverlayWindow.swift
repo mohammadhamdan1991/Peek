@@ -181,15 +181,23 @@ final class OverlayViewController: UIViewController, UIContextMenuInteractionDel
         return area.insetBy(dx: Layout.container / 2, dy: Layout.container / 2)
     }
 
-    private func restingCenter() -> CGPoint {
+    /// `nil` while the window has no room for the button, e.g. mid-transition when a
+    /// Safari sheet or a rotation lays it out at zero size: insetting that empty rect
+    /// gives `CGRect.null`, whose infinite edges reached the layer as a NaN position
+    /// and crashed the host app. The next layout pass places the button.
+    private func restingCenter() -> CGPoint? {
         let area = allowedArea
-        let y = area.minY + yFraction * max(0, area.height)
-        if isDocked { return CGPoint(x: side == .left ? view.bounds.minX : view.bounds.maxX, y: y) }
-        return CGPoint(x: side == .left ? area.minX : area.maxX, y: y)
+        guard !area.isNull, !area.isInfinite, area.width >= 0, area.height >= 0 else { return nil }
+        let fraction = yFraction.isFinite ? min(max(yFraction, 0), 1) : 0.4
+        let y = area.minY + fraction * area.height
+        let center = isDocked
+            ? CGPoint(x: side == .left ? view.bounds.minX : view.bounds.maxX, y: y)
+            : CGPoint(x: side == .left ? area.minX : area.maxX, y: y)
+        return center.x.isFinite && center.y.isFinite ? center : nil
     }
 
     private func positionButton(animated: Bool, velocity: CGFloat = 0) {
-        let center = restingCenter()
+        guard let center = restingCenter() else { return }
         let alpha: CGFloat = isDocked ? 0.4 : 1
         animate(animated, velocity: velocity) {
             self.button.center = center
@@ -248,7 +256,7 @@ final class OverlayViewController: UIViewController, UIContextMenuInteractionDel
             side = button.center.x < view.bounds.midX ? .left : .right
             yFraction = area.height > 0 ? min(max((button.center.y - area.minY) / area.height, 0), 1) : 0
             persistPosition()
-            let distance = abs(restingCenter().x - button.center.x)
+            let distance = restingCenter().map { abs($0.x - button.center.x) } ?? 0
             positionButton(animated: true, velocity: distance > 0 ? abs(gesture.velocity(in: view).x) / distance : 0)
             scheduleDock()
         default:
